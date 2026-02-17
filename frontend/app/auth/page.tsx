@@ -4,14 +4,10 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Brain, Mail, ArrowRight, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { useStore } from "@/store/useStore";
 import ParticleBackground from "@/components/ParticleBackground";
 
 export default function AuthPage() {
-  const router   = useRouter();
-  const setUser  = useStore((s) => s.setUser);
-  const setRole  = useStore((s) => s.setRole);
-  const markOnboarded = useStore((s) => s.markOnboarded);
+  const router = useRouter();
 
   const [email,   setEmail]   = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,25 +20,37 @@ export default function AuthPage() {
     setError("");
 
     try {
-      // Check if user exists by attempting dashboard lookup
-      // We search by email — backend find_by_email handles this
+      // Normalize email to lowercase
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Send to backend — it handles user lookup and routing
       const res = await api.post("/api/onboard", {
-        name: "", email, target_role: "__email_check__",
+        name: "", email: normalizedEmail, target_role: "__email_check__",
         skills: [], strengths: [], weaknesses: [], experience_years: 0,
       });
 
-      if (res.data.exists) {
-        // Existing user → go to dashboard
-        setUser(res.data.user_id, res.data.profile?.name || email);
-        setRole(res.data.profile?.target_role || "");
-        markOnboarded();
-        router.push("/dashboard");
+      console.log("✅ Auth API Response:", res.data);
+      console.log("   user_id:", res.data.user_id, typeof res.data.user_id);
+      console.log("   exists:", res.data.exists, typeof res.data.exists);
+      console.log("   message:", res.data.message);
+
+      // Backend returns user_id and exists flag
+      const userId = res.data.user_id;
+      const isExisting = res.data.exists;
+
+      console.log(`📍 Routing decision: isExisting=${isExisting}`);
+
+      if (isExisting) {
+        // Existing user → dashboard
+        console.log(`✅ EXISTING USER - Redirecting to /dashboard?uid=${userId}`);
+        router.push(`/dashboard?uid=${userId}`);
       } else {
-        // New user → go to onboarding (pass email via query)
-        setUser(res.data.user_id, email);
-        router.push(`/onboarding?uid=${res.data.user_id}&email=${encodeURIComponent(email)}`);
+        // New user → onboarding
+        console.log(`✨ NEW USER - Redirecting to /onboarding?uid=${userId}`);
+        router.push(`/onboarding?uid=${userId}&email=${encodeURIComponent(normalizedEmail)}`);
       }
     } catch (err: any) {
+      console.error("❌ Auth Error:", err);
       setError(err.message || "Something went wrong");
     } finally {
       setLoading(false);

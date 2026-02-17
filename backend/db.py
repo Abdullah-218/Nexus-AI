@@ -34,6 +34,35 @@ def _get_mongo_config():
     return uri, db_name, coll
 
 
+def _validate_no_sentinel_values(data: dict) -> None:
+    """
+    CRITICAL: Prevent sentinel values from being saved to MongoDB.
+    This is a safety check to prevent database corruption.
+    """
+    sentinel_values = ["__email_check__", "__pending__", "__temp__"]
+    
+    def check_value(obj, path=""):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                new_path = f"{path}.{k}" if path else k
+                if isinstance(v, str) and v in sentinel_values:
+                    raise ValueError(
+                        f"CRITICAL: Attempted to save sentinel value '{v}' at '{new_path}' to database! "
+                        f"This would corrupt user data. Operation rejected."
+                    )
+                check_value(v, new_path)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                new_path = f"{path}[{i}]"
+                if isinstance(item, str) and item in sentinel_values:
+                    raise ValueError(
+                        f"CRITICAL: Attempted to save sentinel value '{item}' at '{new_path}' to database!"
+                    )
+                check_value(item, new_path)
+    
+    check_value(data)
+
+
 class Database:
     """
     Singleton MongoDB Atlas connection.
@@ -94,6 +123,9 @@ class Database:
         if not self.available:
             return False
         try:
+            # CRITICAL: Validate before saving (prevents sentinel value corruption)
+            _validate_no_sentinel_values(data)
+            
             doc = {k: v for k, v in data.items() if k != "_id"}
             doc["user_id"]     = user_id
             doc["last_updated"] = datetime.utcnow().isoformat()
@@ -103,6 +135,9 @@ class Database:
                 upsert=True,
             )
             return True
+        except ValueError as e:
+            print(f"[DB] VALIDATION ERROR - {e}")
+            return False
         except Exception as e:
             print(f"[DB] upsert error: {e}")
             return False
@@ -125,7 +160,9 @@ class Database:
         try:
             if not email:
                 return None
-            doc = self._collection.find_one({"profile.email": email})
+            # Normalize email to lowercase for case-insensitive lookup
+            normalized_email = email.lower().strip()
+            doc = self._collection.find_one({"profile.email": normalized_email})
             if doc:
                 doc.pop("_id", None)
             return doc
@@ -138,12 +175,18 @@ class Database:
         if not self.available:
             return False
         try:
+            # CRITICAL: Validate before saving (prevents sentinel value corruption)
+            _validate_no_sentinel_values(patch)
+            
             patch["last_updated"] = datetime.utcnow().isoformat()
             self._collection.update_one(
                 {"user_id": user_id},
                 {"$set": patch}
             )
             return True
+        except ValueError as e:
+            print(f"[DB] VALIDATION ERROR - {e}")
+            return False
         except Exception as e:
             print(f"[DB] patch error: {e}")
             return False

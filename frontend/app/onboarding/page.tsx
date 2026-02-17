@@ -69,16 +69,31 @@ export default function OnboardingPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await onboardUser({
-        name, email, target_role: targetRole,
+      // Normalize email to lowercase for consistency
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      const payload = {
+        name, email: normalizedEmail, target_role: targetRole,
         skills, strengths, weaknesses,
         experience_years: expYears, phone,
-      });
+      };
+      
+      console.log("📤 Onboarding form submitting:", payload);
+      console.log("   user_id from URL:", userId);
+      console.log("   email from URL:", email);
+      console.log("   form target_role:", targetRole);
+      
+      const result = await onboardUser(payload);
+      
+      console.log("✅ Onboarding API response:", result);
+      console.log("   returned user_id:", result.user_id);
+      
       setUser(result.user_id, name);
       setRole(targetRole);
       markOnboarded();
       router.push(`/readiness?uid=${result.user_id}`);
     } catch (err: any) {
+      console.error("❌ Onboarding error:", err);
       setError(err.message);
     } finally {
       setLoading(false);

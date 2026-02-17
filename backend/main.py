@@ -91,11 +91,21 @@ async def health():
 async def onboard(body: OnboardRequest):
     try:
         result = ow.onboard_user(body.model_dump())
+        
+        # Ensure response includes all required fields
+        exists_flag = result.get("exists", False)
+        user_id = result["user_id"]
+        profile = result["profile"]
+        
+        # Sanitize profile: remove sentinel values before returning
+        if profile.get("target_role") == "__email_check__":
+            profile["target_role"] = ""
+        
         return OnboardResponse(
-            user_id=result["user_id"],
-            message="Existing user found" if result.get("exists") else "User created successfully",
-            profile=result["profile"],
-            exists=result.get("exists", False),
+            user_id=user_id,
+            message="Existing user found" if exists_flag else "User created successfully",
+            profile=profile,
+            exists=exists_flag,  # EXPLICIT - must be included!
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

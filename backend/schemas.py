@@ -195,7 +195,7 @@ class OnboardResponse(BaseModel):
     user_id: str
     message: str
     profile: ProfileSchema
-    exists: bool = False
+    exists: bool  # REQUIRED - must always be present!
 
 
 class ReadinessQuestionsResponse(BaseModel):

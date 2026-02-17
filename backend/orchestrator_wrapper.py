@@ -99,32 +99,45 @@ def _weekly_scores_from_roadmap(user: dict) -> List[Dict]:
     return scores
 
 
-# ═══════════════════════════════════════════════════════════════════
-#  1. ONBOARDING
-# ═══════════════════════════════════════════════════════════════════
-
-def onboard_user(data: dict) -> dict:
+def _validate_target_role(target_role: str) -> str:
     """
-    Create a new user document in MongoDB with full schema.
-    Then immediately trigger market intelligence generation.
-    Returns the new user document.
+    Validate target_role before saving to database.
+    CRITICAL: Rejects sentinel values and ensures no invalid values are saved.
+    Returns validated target_role or empty string.
     """
-    import hashlib, time
-    raw_id = f"user_{int(time.time() * 1000)}"
-    user_id = raw_id
+    if not target_role:
+        return ""
+    
+    # REJECT sentinel values
+    if target_role == "__email_check__":
+        raise ValueError("CRITICAL: Cannot save sentinel value '__email_check__' as target_role!")
+    
+    # Reject other system values
+    if target_role.startswith("__") and target_role.endswith("__"):
+        raise ValueError(f"CRITICAL: Cannot save system sentinel '{target_role}' as target_role!")
+    
+    return target_role
 
-    # Build full MongoDB document (matches schema exactly)
-    user_doc = {
+
+def _build_user_document(user_id: str, email: str, target_role: str, data: dict) -> dict:
+    """
+    Build a complete MongoDB user document with proper schema.
+    CRITICAL: Validates target_role to prevent sentinel values from being saved.
+    """
+    # Validate target_role before building
+    validated_role = _validate_target_role(target_role)
+    
+    return {
         "user_id": user_id,
         "created_at": _now(),
         "last_updated": _now(),
         "profile": {
-            "target_role": data["target_role"],
+            "target_role": validated_role,
             "skills": data.get("skills", []),
             "strengths": data.get("strengths", []),
             "weaknesses": data.get("weaknesses", []),
             "name": data.get("name"),
-            "email": data.get("email"),
+            "email": email,
             "phone": data.get("phone"),
             "experience_years": data.get("experience_years", 0),
             "resume_uploaded": False,
@@ -132,7 +145,7 @@ def onboard_user(data: dict) -> dict:
             "resume_file_name": None,
         },
         "career_state": {
-            "current_target_role": data["target_role"],
+            "current_target_role": validated_role,
             "role_history": [],
         },
         "readiness_assessment": {
@@ -187,25 +200,100 @@ def onboard_user(data: dict) -> dict:
         "feedback_analysis": {},
     }
 
-    # Check if email already exists
-    existing = db.find_by_email(data.get("email", ""))
+
+# ═══════════════════════════════════════════════════════════════════
+#  1. ONBOARDING
+# ═══════════════════════════════════════════════════════════════════
+
+def onboard_user(data: dict) -> dict:
+    """
+    Create a new user document in MongoDB with full schema.
+    Then immediately trigger market intelligence generation.
+    Returns the new user document.
+    
+    CRITICAL: Never allow sentinel values (__email_check__) to be saved to database!
+    """
+    import hashlib, time
+    
+    # Reject sentinel as real target_role
+    if data.get("target_role") == "__email_check__":
+        # This is an email check, not an onboarding
+        normalized_email = data.get("email", "").lower().strip()
+        existing = db.find_by_email(normalized_email)
+        if existing:
+            # Return existing user immediately - no DB modifications
+            clean_profile = existing["profile"].copy()
+            # Double-check: sanitize profile if sentinel leaked in
+            if clean_profile.get("target_role") == "__email_check__":
+                clean_profile["target_role"] = ""
+            return {"user_id": existing["user_id"], "profile": clean_profile, "exists": True}
+        else:
+            # New user email check - create with empty target_role (NOT sentinel)
+            raw_id = f"user_{int(time.time() * 1000)}"
+            user_id = raw_id
+            target_role = ""  # Empty, NOT sentinel
+            
+            # Build minimal document for new user
+            user_doc = _build_user_document(user_id, normalized_email, target_role, data)
+            db.upsert_user(user_id, user_doc)
+            
+            return {
+                "user_id": user_id,
+                "profile": user_doc["profile"],
+                "exists": False
+            }
+    
+    raw_id = f"user_{int(time.time() * 1000)}"
+    user_id = raw_id
+    
+    # Normalize email: lowercase and strip whitespace (case-insensitive lookups)
+    normalized_email = data.get("email", "").lower().strip()
+    
+    # Sanitize target_role: never allow sentinel value to be saved
+    target_role = data.get("target_role", "")
+    if target_role == "__email_check__":
+        target_role = ""  # Convert sentinel to empty string
+
+    # Build full MongoDB document (matches schema exactly)
+    user_doc = _build_user_document(user_id, normalized_email, target_role, data)
+
+    # Check if email already exists (use normalized email for lookup)
+    existing = db.find_by_email(normalized_email)
     if existing:
         # If this is just an email check (not a real onboarding), return immediately
         if data.get("target_role") == "__email_check__":
-            # Sanitize profile - if target_role is corrupted with __email_check__, clean it
+            # Return existing user WITHOUT modifying database
+            # Clean up profile if it has sentinel value corrupted target_role
             clean_profile = existing["profile"].copy()
+            print(f"[onboard] Email check for {normalized_email}")
+            print(f"[onboard] Profile before sanitization: target_role='{clean_profile.get('target_role')}'")
+            
             if clean_profile.get("target_role") == "__email_check__":
-                clean_profile["target_role"] = ""  # Clear sentinel value
+                clean_profile["target_role"] = ""
+                print(f"[onboard] ⚠️  Sentinel detected! Sanitizing to empty string")
+            
+            print(f"[onboard] Profile after sanitization: target_role='{clean_profile.get('target_role')}'")
+            print(f"[onboard] Returning: exists=True, user_id='{existing['user_id']}'")
+            
             return {"user_id": existing["user_id"], "profile": clean_profile, "exists": True}
+        
+        # Validate: target_role cannot be empty when updating existing user
+        if not data.get("target_role") or data.get("target_role") == "__email_check__":
+            # Keep their existing target role if not provided
+            target_role = existing.get("career_state", {}).get("current_target_role") or existing.get("profile", {}).get("target_role") or ""
+            if not target_role:
+                print(f"[onboard] WARNING: No valid target_role for existing user {existing['user_id']}")
+        else:
+            target_role = data["target_role"]
         
         # Update the existing user's profile with new onboarding data
         updated_profile = {
-            "target_role": data["target_role"],
+            "target_role": target_role,
             "skills": data.get("skills", []),
             "strengths": data.get("strengths", []),
             "weaknesses": data.get("weaknesses", []),
             "name": data.get("name") or existing["profile"].get("name"),
-            "email": data.get("email"),
+            "email": normalized_email,
             "phone": data.get("phone") or existing["profile"].get("phone"),
             "experience_years": data.get("experience_years", 0),
             "resume_uploaded": existing["profile"].get("resume_uploaded", False),
@@ -213,7 +301,7 @@ def onboard_user(data: dict) -> dict:
             "resume_file_name": existing["profile"].get("resume_file_name"),
         }
         updated_career_state = {
-            "current_target_role": data["target_role"],
+            "current_target_role": target_role,
             "role_history": existing.get("career_state", {}).get("role_history", []),
         }
         db.patch_user(existing["user_id"], {
@@ -222,19 +310,22 @@ def onboard_user(data: dict) -> dict:
             "last_updated": _now(),
         })
         
-        # Regenerate market intelligence with the new target role
-        print(f"[onboard] Regenerating market intelligence for {data['target_role']}...")
-        try:
-            market_result = _market_agent.run({"target_role": data["target_role"]})
-            market_analysis = market_result.get("market_analysis", {})
-            print(f"[onboard] Generated market analysis with role_title: {market_analysis.get('role_title')}")
-            # Fully replace market_analysis (not merge)
-            db.patch_user(existing["user_id"], {"market_analysis": market_analysis})
-            print(f"[onboard] Market intelligence updated successfully")
-        except Exception as e:
-            print(f"[onboard] market intel regeneration failed: {e}")
-            import traceback
-            traceback.print_exc()
+        # Regenerate market intelligence with the new target role (only if we have a valid target_role)
+        if target_role:
+            print(f"[onboard] Regenerating market intelligence for {target_role}...")
+            try:
+                market_result = _market_agent.run({"target_role": target_role})
+                market_analysis = market_result.get("market_analysis", {})
+                print(f"[onboard] Generated market analysis with role_title: {market_analysis.get('role_title')}")
+                # Fully replace market_analysis (not merge)
+                db.patch_user(existing["user_id"], {"market_analysis": market_analysis})
+                print(f"[onboard] Market intelligence updated successfully")
+            except Exception as e:
+                print(f"[onboard] market intel regeneration failed: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"[onboard] Skipping market intel regeneration - no target role provided")
         
         # Return the updated profile
         existing["profile"] = updated_profile
@@ -242,18 +333,21 @@ def onboard_user(data: dict) -> dict:
 
     db.upsert_user(user_id, user_doc)
 
-    # Trigger market intelligence immediately (non-blocking generation)
-    print(f"[onboard] Generating initial market intelligence for {data['target_role']}...")
-    try:
-        market_result = _market_agent.run({"target_role": data["target_role"]})
-        user_doc["market_analysis"] = market_result.get("market_analysis", {})
-        print(f"[onboard] Generated market analysis with role_title: {user_doc['market_analysis'].get('role_title')}")
-        db.patch_user(user_id, {"market_analysis": user_doc["market_analysis"]})
-        print(f"[onboard] Market intelligence saved successfully")
-    except Exception as e:
-        print(f"[onboard] market intel failed: {e}")
-        import traceback
-        traceback.print_exc()
+    # Trigger market intelligence immediately (only if target_role was provided)
+    if target_role:
+        print(f"[onboard] Generating initial market intelligence for {target_role}...")
+        try:
+            market_result = _market_agent.run({"target_role": target_role})
+            user_doc["market_analysis"] = market_result.get("market_analysis", {})
+            print(f"[onboard] Generated market analysis with role_title: {user_doc['market_analysis'].get('role_title')}")
+            db.patch_user(user_id, {"market_analysis": user_doc["market_analysis"]})
+            print(f"[onboard] Market intelligence saved successfully")
+        except Exception as e:
+            print(f"[onboard] market intel failed: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print(f"[onboard] Skipping market intelligence (no target_role provided - awaiting onboarding form)")
 
     return {"user_id": user_id, "profile": user_doc["profile"], "exists": False}
 

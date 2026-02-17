@@ -43,7 +43,7 @@ from groq import AuthenticationError, Groq
 
 # Import database modules
 from user_context import UserContextManager
-from mongo_store import MongoStore
+from db import db
 
 # Import resume analysis dependencies
 try:
@@ -432,12 +432,8 @@ class ResumeAnalyzerAgent:
             
             self.context_manager.save_context(user_id, context)
             
-            # Optionally sync to MongoDB
-            try:
-                mongo = MongoStore()
-                mongo.sync(user_id, context)
-            except:
-                pass  # MongoDB optional
+            # Sync to MongoDB
+            db.upsert_user(user_id, context)
             
             print(f"  ✓ Resume analysis complete in {processing_time:.2f}s")
             print(f"  ✓ {len(normalized_skills)} skills extracted")
@@ -1060,9 +1056,8 @@ class Orchestrator:
         # Deep-copy the schema template to live state
         self.user_state = json.loads(json.dumps(self.INITIAL_STATE))
         
-        # Initialize context manager and MongoDB
+        # Initialize context manager (MongoDB via singleton db instance)
         self.context_manager = UserContextManager()
-        self.mongo = MongoStore()
 
         # Instantiate all agents
         self.resume_agent      = ResumeAnalyzerAgent()
@@ -1498,7 +1493,7 @@ class Orchestrator:
             
             # Persist to database immediately
             self.context_manager.save_context(user_id, context)
-            self.mongo.sync(user_id, context)
+            db.upsert_user(user_id, context)
             
             return {
                 "source": "resume",
@@ -1584,7 +1579,7 @@ class Orchestrator:
         
         # Persist
         self.context_manager.save_context(user_id, context)
-        self.mongo.sync(user_id, context)
+        db.upsert_user(user_id, context)
         
         print_section("READINESS RESULT")
         print_dict(self.user_state["readiness"])
@@ -1666,7 +1661,7 @@ class Orchestrator:
                 }
             })
             self.context_manager.save_context(user_id, context)
-            self.mongo.sync(user_id, context)
+            db.upsert_user(user_id, context)
             print(f"  ✓ Profile saved to MongoDB (User ID: {user_id})")
         except Exception as e:
             print(f"  ⚠ Database save error: {str(e)[:100]}")
