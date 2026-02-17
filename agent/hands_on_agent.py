@@ -4,7 +4,7 @@ class HandsOnAgent:
     def __init__(self):
         # Use the working pattern
         self.client = Groq(
-            api_key="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"
+            api_key="XXX"
         )
 
         # This is our "memory"
