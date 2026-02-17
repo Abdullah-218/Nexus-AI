@@ -1,0 +1,103 @@
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+*.virtualenv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environment variables and API keys
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.test.local
+.env.development.local
+
+# Node modules (Frontend)
+node_modules/
+frontend/node_modules/
+npm-debug.log
+yarn-error.log
+*.tsbuildinfo
+
+# Next.js
+.next/
+frontend/.next/
+out/
+
+# Build artifacts
+dist/
+build/
+*.log
+logs/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+*.code-workspace
+
+# OS files
+Thumbs.db
+.Trashes
+ehthumbs.db
+.env.*.swp
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+mongo_data/
+
+# Temporary files
+*.tmp
+.cache/
+temp/
+tmp/
+
+# OS-specific
+.AppleDouble
+.LSOverride
+._*
+
+# Misc
+.turbo/
+dist/
+.cache/

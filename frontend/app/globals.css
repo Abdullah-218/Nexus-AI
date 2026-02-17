@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --primary: #3B82F6;
+    --accent: #8B5CF6;
+    --surface: #0F1117;
+    --surface-card: #1A1D2E;
+    --border: rgba(255, 255, 255, 0.08);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--surface);
+    color: #fff;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0F1117; }
+  ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.4); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.7); }
+}
+
+@layer components {
+  /* Glass card */
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-2xl;
+  }
+
+  /* Gradient border card */
+  .card-glow {
+    @apply glass shadow-card transition-all duration-300 hover:shadow-glow hover:border-blue-500/20;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl
+           transition-all duration-200 shadow-glow hover:shadow-glow-accent
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply bg-white/[0.06] hover:bg-white/[0.1] text-white/80 hover:text-white
+           font-medium px-5 py-2.5 rounded-xl border border-white/[0.08]
+           transition-all duration-200;
+  }
+
+  /* Input field */
+  .input-field {
+    @apply w-full bg-white/[0.04] border border-white/[0.1] rounded-xl px-4 py-3
+           text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60
+           focus:bg-white/[0.06] transition-all duration-200;
+  }
+
+  /* Tag pill */
+  .tag {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
+           bg-blue-500/10 text-blue-300 border border-blue-500/20;
+  }
+
+  /* Status badge */
+  .badge-passed {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
+           bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+  }
+  .badge-failed {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
+           bg-red-500/15 text-red-400 border border-red-500/20;
+  }
+  .badge-pending {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
+           bg-white/[0.06] text-white/50 border border-white/[0.08];
+  }
+
+  /* Section title */
+  .section-title {
+    @apply text-2xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .bg-grid {
+    background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}

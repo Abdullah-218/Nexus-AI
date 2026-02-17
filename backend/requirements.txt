@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.8.2
+pymongo[srv]==4.8.0
+groq>=0.13.0
+python-dotenv==1.0.1
+pdfminer.six==20231228
+python-multipart==0.0.9
+Pillow==10.4.0
+pytesseract==0.3.13
